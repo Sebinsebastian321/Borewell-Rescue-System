@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Readings Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .readings-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .reading-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+        }
+        .reading-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .reading-label {
+            font-size: 1.2rem;
+            color: #666;
+        }
+        .reading-unit {
+            font-size: 1rem;
+            color: #999;
+        }
+        .chart-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            height: 300px;
+        }
+        .last-updated {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .temperature { color: #e74c3c; }
+        .humidity { color: #3498db; }
+        .co2 { color: #27ae60; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sensor Readings Dashboard</h1>
+        </div>
+        
+        <div class="readings-container">
+            <div class="reading-card">
+                <div class="reading-label">Temperature</div>
+                <div id="temp-value" class="reading-value temperature">--</div>
+                <div class="reading-unit">°C</div>
+            </div>
+            
+            <div class="reading-card">
+                <div class="reading-label">Humidity</div>
+                <div id="humidity-value" class="reading-value humidity">--</div>
+                <div class="reading-unit">%</div>
+            </div>
+            
+            <div class="reading-card">
+                <div class="reading-label">CO2 Concentration</div>
+                <div id="co2-value" class="reading-value co2">--</div>
+                <div class="reading-unit">ppm</div>
+            </div>
+        </div>
+        
+        <h2>Temperature Chart</h2>
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+        
+        <h2>Humidity Chart</h2>
+        <div class="chart-container">
+            <canvas id="humidityChart"></canvas>
+        </div>
+        
+        <h2>CO2 Concentration Chart</h2>
+        <div class="chart-container">
+            <canvas id="co2Chart"></canvas>
+        </div>
+        
+        <p id="last-updated" class="last-updated">Last updated: --</p>
+    </div>
+
+    <script>
+        const API_KEY = '12PI2LTIOP6T7JM2';
+        const CHANNEL_ID = '2904635';  // Now using the specific channel ID from your URLs
+        
+        let tempChart, humidityChart, co2Chart;
+        let chartData = {
+            labels: [],
+            tempData: [],
+            humidityData: [],
+            co2Data: []
+        };
+
+        // Initialize charts
+        function initCharts() {
+            // Temperature Chart
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            tempChart = new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: chartData.tempData,
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: getChartOptions()
+            });
+            
+            // Humidity Chart
+            const humidityCtx = document.getElementById('humidityChart').getContext('2d');
+            humidityChart = new Chart(humidityCtx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Humidity (%)',
+                        data: chartData.humidityData,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: getChartOptions()
+            });
+            
+            // CO2 Chart
+            const co2Ctx = document.getElementById('co2Chart').getContext('2d');
+            co2Chart = new Chart(co2Ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'CO2 (ppm)',
+                        data: chartData.co2Data,
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: getChartOptions()
+            });
+        }
+        
+        // Common chart options
+        function getChartOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 3
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                }
+            };
+        }
+
+        // Fetch the latest data
+        function fetchLatestData() {
+            // Using the direct channel URL format you provided
+            $.getJSON(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${API_KEY}`, function(data) {
+                if (!data) return;
+                
+                // Update current readings
+                document.getElementById('temp-value').textContent = data.field1 ? parseFloat(data.field1).toFixed(1) : '--';
+                document.getElementById('humidity-value').textContent = data.field2 ? parseFloat(data.field2).toFixed(1) : '--';
+                document.getElementById('co2-value').textContent = data.field3 ? parseFloat(data.field3).toFixed(0) : '--';
+                
+                // Update last updated time
+                const lastUpdated = new Date(data.created_at);
+                document.getElementById('last-updated').textContent = `Last updated: ${lastUpdated.toLocaleString()}`;
+                
+                // Update the chart with latest data
+                updateCharts();
+            });
+        }
+
+        // Fetch historical data
+        function fetchHistoricalData() {
+            // Using the direct channel URL format you provided
+            $.getJSON(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${API_KEY}&results=20`, function(data) {
+                if (!data || !data.feeds || data.feeds.length === 0) return;
+                
+                // Clear existing data
+                chartData.labels = [];
+                chartData.tempData = [];
+                chartData.humidityData = [];
+                chartData.co2Data = [];
+                
+                // Add data points
+                data.feeds.forEach(feed => {
+                    const date = new Date(feed.created_at);
+                    chartData.labels.push(date.toLocaleTimeString());
+                    
+                    chartData.tempData.push(feed.field1 ? parseFloat(feed.field1) : null);
+                    chartData.humidityData.push(feed.field2 ? parseFloat(feed.field2) : null);
+                    chartData.co2Data.push(feed.field3 ? parseFloat(feed.field3) : null);
+                });
+                
+                // Update all charts
+                tempChart.data.labels = chartData.labels;
+                tempChart.data.datasets[0].data = chartData.tempData;
+                tempChart.update();
+                
+                humidityChart.data.labels = chartData.labels;
+                humidityChart.data.datasets[0].data = chartData.humidityData;
+                humidityChart.update();
+                
+                co2Chart.data.labels = chartData.labels;
+                co2Chart.data.datasets[0].data = chartData.co2Data;
+                co2Chart.update();
+            });
+        }
+
+        // Update charts with new data point
+        function updateCharts() {
+            $.getJSON(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${API_KEY}`, function(data) {
+                if (!data) return;
+                
+                const date = new Date(data.created_at);
+                const timeStr = date.toLocaleTimeString();
+                
+                // Check if this is a new timestamp
+                if (chartData.labels.length > 0 && chartData.labels[chartData.labels.length - 1] === timeStr) {
+                    return; // Skip duplicate timestamps
+                }
+                
+                // Add new data point
+                chartData.labels.push(timeStr);
+                chartData.tempData.push(data.field1 ? parseFloat(data.field1) : null);
+                chartData.humidityData.push(data.field2 ? parseFloat(data.field2) : null);
+                chartData.co2Data.push(data.field3 ? parseFloat(data.field3) : null);
+                
+                // Remove oldest data point if we have more than 20
+                if (chartData.labels.length > 20) {
+                    chartData.labels.shift();
+                    chartData.tempData.shift();
+                    chartData.humidityData.shift();
+                    chartData.co2Data.shift();
+                }
+                
+                // Update all charts
+                tempChart.data.labels = chartData.labels;
+                tempChart.data.datasets[0].data = chartData.tempData;
+                tempChart.update();
+                
+                humidityChart.data.labels = chartData.labels;
+                humidityChart.data.datasets[0].data = chartData.humidityData;
+                humidityChart.update();
+                
+                co2Chart.data.labels = chartData.labels;
+                co2Chart.data.datasets[0].data = chartData.co2Data;
+                co2Chart.update();
+            });
+        }
+
+        // Initialize everything when the page loads
+        $(document).ready(function() {
+            initCharts();
+            fetchHistoricalData(); // Get historical data first
+            fetchLatestData(); // Then get latest reading
+            
+            // Refresh data every 15 seconds
+            setInterval(fetchLatestData, 15000);
+        });
+    </script>
+</body>
+</html>
